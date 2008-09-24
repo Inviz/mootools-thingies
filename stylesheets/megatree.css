@@ -1,0 +1,58 @@
+#tree_container {
+  font-size:16px;
+  width:500px;
+  margin:200px auto;
+  padding:10px;
+  background:#fff;
+}
+
+#tree_container .title {
+  padding:4px 0 0px 19px;
+  line-height:18px;
+  vertical-align:bottom;
+}
+
+#tree_container .node .title {
+  background:url('../images/icons/file.gif') 4px 4px no-repeat;
+}
+
+
+#tree_container .folder .title {
+  background:url('../images/icons/folder.gif') left no-repeat;
+}
+
+#tree_container .node .roost {
+  padding:0 0 0 19px;
+}
+
+#tree_container .node .opener {
+  display:inline-block;
+  _display:inline;
+  zoom:1;
+  width:15px; 
+  text-align:center;
+}
+
+#tree_container .node .opener {
+  text-indent:-2000px;
+  margin:0 -18px 0 0;
+  width:23px;
+  z-index:25;
+  position:relative;
+  background:url('../images/icons/open.gif') no-repeat;
+}
+
+#tree_container .closed .opener {
+  background:url('../images/icons/closed.gif') no-repeat;
+}
+
+ul.tooltip {
+  border:1px solid #ccc;
+  background:#efefef;
+}
+
+ul.tooltip li {
+  border-bottom:1px solid-bottom #aaa;
+  padding:1px 2px;
+  cursor:pointer;
+}

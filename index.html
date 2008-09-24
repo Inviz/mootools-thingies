@@ -1,0 +1,90 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+    <title>Tree demo</title>
+    <link rel="stylesheet" href="./stylesheets/megatree.css" type="text/css" media="screen" title="no title" charset="utf-8">
+    <link rel="stylesheet" href="./stylesheets/master.css" type="text/css" media="screen" title="no title" charset="utf-8">
+    <script src="./javascripts/mootools-core.js"></script>
+    <script src="./javascripts/mootools-more.js"></script>
+    <script src="./javascripts/jester.js"></script>
+    <script src="./javascripts/megatree.js"></script>
+  </head>
+</html>
+<body>
+<div id="tree_container"></div>
+
+<script>
+
+
+window.addEvent('domready', function() {
+
+console.time('Setting jester resources')
+
+new Resource("Song", {prefix: "/accounts/1/projects/1/items"});
+new Resource("Game", {prefix: "/accounts/1/projects/1/items"});
+
+new Resource("Item", {prefix: "/accounts/1/projects/1/items"});
+new Resource("Folder", {prefix: "/accounts/1/projects/1/items"})
+
+console.timeEnd('Setting jester resources')
+
+
+console.time('Bulding a tree (~ 20 nodes)')
+var Projects = new Tree.Root({'selection': 'dependant', 'draggable': true});
+Projects.loadChildren([
+  new Folder({title: "Porn"}),
+  new Folder({title: "Music"}),
+  new Folder({title: "Games"})
+])[2].loadChildren([
+  new Folder({title: "RTS & SHIT", selected: true}),
+  new Folder({title: "Adventure", open: false}),
+  new Folder({title: "Quest"})
+])[0].loadChildren([
+    new Game({title: "Command & Conquer"}),
+    new Game({title: "World of Warcraft"}),
+    new Game({title: "Spore"})
+])[0].getParent().getParent().getPrevious().loadChildren([
+    new Song({artist: "Shakira", title: "Whatever"}),
+    new Song({artist: "Злой Ой!", title: "Россия"}),
+    new Song({artist: "Aphex Twin", title: "4"}),
+    new Song({artist: "Shakira", title: "Hips dont lie"})
+])
+console.timeEnd('Bulding a tree (~ 20 nodes)')
+
+console.time('Rendering a tree')
+Projects.render()
+Projects.get('wrapper').inject($('tree_container'))
+console.timeEnd('Rendering a tree')
+
+console.time('Adding few more nodes')
+Projects.loadChildren([new Folder({title: "Fuckup folder", open: false})])[0].loadChildren([new Item({title: "Omg, this sucks"})])
+console.timeEnd('Adding few more nodes')
+
+console.time('Adding loadable node')
+Projects.loadChildren([new Folder({title: "Remote", open: false, loadable: true})])
+console.timeEnd('Adding loadable node')
+
+console.time('Sorting a tree by title')
+Projects.sortBy("title", true) 
+console.timeEnd('Sorting a tree by title')
+
+console.time('Removing one node')
+Projects.children.each(function(n) { if (n.model.title == "Porn") n.remove()})
+console.timeEnd('Removing one node')
+
+//The meaning of this is that you may re-request the json 
+//representation of the tree so widget will find differences & try to rebuild nodes
+
+console.time('Patch the tree with new json structure')
+Projects.loadChildren([new Game({title: "Spore"})])
+Projects.render() //apply
+console.timeEnd('Patch the tree with new json structure')
+
+});
+
+</script>
+
+</body>

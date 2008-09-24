@@ -1,0 +1,59 @@
+ul, li, ol, body, html, table, td, tr, h1, h2, h3, h4, h5, big, small, dl, dd, dt, p, form{
+	padding:0;
+	margin:0;
+	font-size:100%;
+	font-family:Helvetica;
+	line-height:16px;
+	color:#333;
+}
+
+html, body {
+	height:100%;
+}
+
+ul, li {
+	list-style:none;
+}
+
+table {
+	border-collapse:collapse
+}
+
+img {
+	border:0;
+}
+
+a {
+	color:#005ca5;
+	outline:none;
+	text-decoration:none;
+}
+
+a:hover {
+  text-decoration:underline;
+}
+
+input, textarea {
+	outline:none;
+}
+
+html {
+}
+
+body {	
+	min-width:960px;
+	background-color:#eeeeee;
+	xbackground:url('/images/layout/background.png') top repeat-x;
+}
+
+h1 {
+  font-size:25px;
+}
+
+label {
+  font-size:18px;
+  text-transform:lowercase;
+  display:block;
+  margin:0 0 5px 0;
+  cursor:pointer;
+}
