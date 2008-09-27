@@ -2,23 +2,6 @@
 // Result or syntax may vary
 // But the code's much better
 
-//var Post = new Resource("Post")
-//Post.find("all", function(p) {
-//  p.title = "All your base are belong to us"
-//  p.save
-//})
-
-//p = new Post({title: "Hello world"}).save
-//p.errors #=> {something}
-
-//Model.prototype.addEvents({ //global callbacks example
-//  'start': function() {
-//    $('ticker').set('html', 'Loading')
-//  },
-//  'complete': function() {
-//    $('ticker').set('html', 'Loading')
-//  }
-//})
 var Jester = new Hash;
 Jester.Parsers = new Class({
   initialize: function(context) {
