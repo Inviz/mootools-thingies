@@ -400,7 +400,7 @@ Tree.Row = new Class({
     if (col.align) td.setStyle('text-align', col.align)
     if (col['class']) td.addClass(col['class']);
     td.addClass('column').addClass('column-' + (i + 1))
-    td.adopt(new Element('span', {'class': 'column-inside', 'html': col.html || this.model[col.source]}))
+    td.adopt(new Element('div', {'class': 'column-inside', 'html': col.html || this.model[col.source]}))
     return td.inject(this.elements.row)
   }
 })
@@ -567,7 +567,7 @@ Tree.Node.implement({
   },
   
   renderLabel: function() {
-    if (!this.elements.title) this.elements.title = new Element('label', {'class': 'title', 'style': 'display:inline', 'for': this.getUID()})
+    if (!this.elements.title) this.elements.title = new Element('label', {'class': 'title', 'for': this.getUID()})
   },
   
   getSelected: function() {
@@ -601,7 +601,7 @@ Tree.Node.implement({
         this.select()
       }
     }
-    this.elements.checkbox.injectBefore(this.elements.title)
+    this.elements.checkbox.inject(new Element('div', {'class': 'checkbox'}).injectBefore(this.elements.title))
   }
 })
 
@@ -630,7 +630,7 @@ Tree.Node.implement({
       }.bind(this))
        this.isOpen() ? this.open() : ((this.hasChildren() || this.is('loadable')) && this.close());
     }
-    this.elements.opener.injectAfter(this.elements.checkbox || this.elements.title)
+    this.elements.opener.injectBefore(this.elements.title)
   }
 })
 
@@ -938,12 +938,14 @@ Tree.DragNDrop = new Class({
 	getClone: function(event, element){
 		if (!this.options.clone) return new Element('div').inject(document.body);
 		if ($type(this.options.clone) == 'function') return this.options.clone.call(this, event, element, this.list);
+		var self = element.getParent('.self')
 		return element.clone(true).setStyles({
 			'margin': '15px 0 0 20px',
 			'position': 'absolute',
 			'visibility': 'hidden',
-			'width': element.getStyle('width')
-		}).inject(this.list).position(element.getPosition(element.getOffsetParent()));
+			'width': 200,
+			'z-index':250,
+		}).inject(this.list).position(self.getPosition(self.getOffsetParent()));
 	}
 })
 
