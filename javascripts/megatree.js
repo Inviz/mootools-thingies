@@ -1,4 +1,3 @@
-(function(){
 Tree = {}
 
 Tree.Node = new Class({
@@ -42,6 +41,16 @@ Tree.Node = new Class({
     return things.map(function(thing) {
       return this.appendChild(thing)
     }, this)
+  },
+  
+  swallow: function(what) {
+    if ($type(what) == "array") {
+      what.each(function(el) {
+        this.swallow(el)
+      }, this)
+    } else {
+      this.loadChildren([what])
+    }
   },
   
   destruct: function() {
@@ -156,7 +165,7 @@ Tree.Node = new Class({
 	  if (this.model) {
 	    if (!this.elements.title) this.elements.title = new Element('span', {'class': 'title'})
 	    this.elements.title.store('node', this).store('root', this.root)
-	    this.elements.title.set('html', this.model.title).injectTop(this.get('self'))
+	    this.elements.title.set('html', this.model[this.root.options.attribute]).injectTop(this.get('self'))
 	  }
 	  if (this.is('openable', true) || this.isRoot()) {
 	    if (!this.elements.roost) this.elements.roost = new Element('ul', {'class': 'roost'}).injectBottom(this.elements.wrapper)
@@ -412,7 +421,7 @@ Tree.Red = new Class({
   initialize: function(root, model) {
     var ret = this.parent(root, model);
     this.addEvent('afterRender', function() {
-      this.elements.title.setStyle('color', 'red').set('html', 'Game: ' + this.model.title)  
+      this.elements.title.setStyle('color', 'red').set('html', 'Game: ' + this.model[this.root.options.attribute])  
     }.bind(this));
     return ret;
   }
@@ -430,7 +439,9 @@ Tree.Root = new Class({
     states:  'States',
     actions: 'Actions',
     selection: false,
-    draggable: true
+    draggable: true,
+    
+    attribute: 'name'
   },
   
   $storage: {},
@@ -801,18 +812,18 @@ Tree.Root.implement({
     var pos = this.drag.drag.getPosition(el);
     switch(where) {
       case "before":
-        pos = ['url(images/line.gif) repeat-x', 0, pos.top];
+        pos = ['line', 0, pos.top];
         break
       case "after":
-        pos = ['url(images/line.gif) repeat-x', 0, pos.bottom]; 
+        pos = ['line', 0, pos.bottom]; 
         break
       default:  
-        pos = ['url(images/icons/arrow_left.png) no-repeat', pos.left + el.offsetWidth, pos.top + 2]
+        pos = ['arrow', pos.left + el.offsetWidth, pos.top + 2]
     }
     var wrapper = this.get('wrapper');
     pos[1] -= this.drag.drag.getPosition(wrapper).left - 5
     pos[2] -= this.drag.drag.getPosition(wrapper).top + 2
-    wrapper.setStyle('background', pos[0]).setStyle('background-position', pos.slice(1, 3))
+    wrapper.removeClass('line').removeClass('arrow').addClass(pos[0]).setStyle('background-position', pos.slice(1, 3))
   },
   
   hide: function() {
@@ -949,5 +960,3 @@ Tree.DragNDrop = new Class({
 	}
 })
 
-
-})();

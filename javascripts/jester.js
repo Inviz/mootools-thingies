@@ -2,6 +2,23 @@
 // Result or syntax may vary
 // But the code's much better
 
+//var Post = new Resource("Post")
+//Post.find("all", function(p) {
+//  p.title = "All your base are belong to us"
+//  p.save
+//})
+
+//p = new Post({title: "Hello world"}).save
+//p.errors #=> {something}
+
+//Model.prototype.addEvents({ //global callbacks example
+//  'start': function() {
+//    $('ticker').set('html', 'Loading')
+//  },
+//  'complete': function() {
+//    $('ticker').set('html', 'Loading')
+//  }
+//})
 var Jester = new Hash;
 Jester.Parsers = new Class({
   initialize: function(context) {
@@ -92,12 +109,12 @@ Jester.Resource = new Class({
       singular_xml: this.options.singular.replace(/_/g, "-"),
       plural_xml: this.options.plural.replace(/_/g, "-"),
     })
-    
-    return new Class({
+    this.klass = new Class({
       Extends:Jester.Model,
       Implements: (this.options.associations) ? this.setAssociations(this.options.associations) : {},
       resource: this
     }).extend(this)
+    return this.klass
   },
   
   setAssociations: function(associations) {
@@ -117,7 +134,7 @@ Jester.Resource = new Class({
 	},
   
   create: function(a,b) { //Ruby-style Model#create backward compat
-    return new this(a,b)
+    return new (this.klass || this)(a,b)
   },
   
   request: function(options, callback) {
@@ -129,7 +146,7 @@ Jester.Resource = new Class({
 	      if (this[cc]) data = this[cc](data)
         if (options[cc]) options[cc](data)
         if (e == "success") {
-          if (callback) callback.concat ? this.fireEvent(callback, data) : this.chain(callback);
+          if (callback) callback.concat ? this.fireEvent(callback, data) : callback();
           var result = this.create(this.getParser().parse(data), true);
           this.callChain(result)
         }
@@ -222,7 +239,7 @@ Jester.Model = new Class({
   },
   
   request: function(options, callback) {
-    this.resource.request($extend(this.getClean(), options), callback)
+    return this.resource.request($extend(this.getClean(), options), callback)
   },
   
   toString: function() {
@@ -297,9 +314,10 @@ Jester.Model.Actions.each(function(k, a) {
     var options = Jester.Model.Actions[a].call(this, args);
     if ($type(options) == "object") {
       this.fireEvent('before' + a.capitalize())
-      return this.request(options, function() {
-        this.fireEvent('after' + a.capitalize());
-      }.bind(this))
+      var that = this
+      return this.request(options).chain(function(data) {
+        that.fireEvent('after' + a.capitalize(), data);
+      })
     }
     return this
   }
