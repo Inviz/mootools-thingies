@@ -176,7 +176,8 @@ Jester.Resource = new Class({
   },
   
   getURL: function(route, thing) {
-    return (this.options.prefix + (this.options.urls[route] || route)).replace(/:([a-zA-Z0-9]+)/g, this.interpolation(thing))
+    var prefix = (this.options.prefix && this.options.prefix.run ? this.options.prefix() : this.options.prefix)
+    return (prefix + (this.options.urls[route] || route)).replace(/:([a-zA-Z0-9]+)/g, this.interpolation(thing))
   },
   
   interpolation: function(thing) {
@@ -226,9 +227,14 @@ Jester.Model = new Class({
         if ($type(assoc) == "array") {
           var reflection = assoc[0]
           var options = assoc[1] || {}
-          if (options.prefix == true) options.prefix = this.resource.getURL("show", this)
+          if (options.prefix == true) {
+            options.prefix = this.resource.getURL.pass(["show", this], this.resource)
+          }
           this.resource.associations[name] = new Jester.Resource(reflection, options)
-        } 
+        }
+        this['new' + this.resource.associations[name].options.singular.capitalize()] = function(data) {
+          return new (this.resource.associations[name])(data)
+        }
         this[name] = value.map(function(model) {
           return new (this.resource.associations[name])(model, true)
         }.bind(this))
@@ -284,7 +290,7 @@ Jester.Model = new Class({
 
 Jester.Model.Actions = new Hash({
   save: function() {
-	  return {method: "post", route: "show"}
+	  return this._new_record ? {method: "post", route: "list"} : {method: "post", route: "show"}
 	},
 	
 	destroy: function() {
