@@ -108,3 +108,9 @@ window.addEvent('domready', function() {
     el.relatizeDate()
   })
 })
+//ruby helper example:
+
+//def relative_datetime(datetime, cls = "relative-datetime")
+//  s = datetime.strftime("%a %b %d %H:%M:%S %z %Y")
+//  %{<abbr title="#{s}" class="#{cls}">#{s}</abbr>}
+//end
