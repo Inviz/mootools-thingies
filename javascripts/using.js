@@ -79,7 +79,7 @@ var DependencyManager = new Class({
   
   load: function(file) {
     this.loaded.push(file)
-    return Asset.javascript(file + "?" + Math.random(), {
+    return Asset.javascript(file, {
       onload: function() {
         console.info('Now using', file)
         this.callChain()
