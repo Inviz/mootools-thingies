@@ -59,8 +59,10 @@ Jester.Parsers.JSON = new Class({
     if (!key && !value) return []
     var type = $type(value)
     if (type == "object") return this.object(value)
-    if (key == "id" || key.substr(-3, 3) == "_id") return this.integer(value, key)
-    if (key.substr(-3, 3) == "_at") return this.datetime(value, key)
+    if (key) {
+      //if (key == "id" || key.substr(-3, 3) == "_id") return this.integer(value, key)
+      if (key.substr(-3, 3) == "_at") return this.datetime(value, key)
+    }
     if (type == "array") return this.array(value, key)
     return value
   }
@@ -83,88 +85,160 @@ Jester.Resource = new Class({
 
   options: {
     format: "json",
-    defaultParams: {},
-    remote: false,
     urls: {
       list: "/:plural",
       show: "/:plural/:id",
       destroy: "/:plural/:id"
     },
-    associations: {},
-    prefix: "",
-    parsers: Jester.Parsers
+    requestOptions: {
+      secure: false
+    },
+    associations: {}, //{users: ["Person", options]}
+    prefix: "", //If prefix is "true" it respects parent association's path
+    custom: {}, //Name => method hash or an array of PUT methods
+    parsers: Jester.Parsers,
+    postprocess: function(data) {
+      if ($type(data) != "array" || data.some(function(e) { return e.length != 2})) return data
+      return {
+        errors: data.map(function(i) { return i.join(" ")})
+      }
+    }
   },
   
   associations: {},
 
   initialize: function(name, options) {
+    
     this.name = name
     $extend(this.options, {
-      singular: name.toLowerCase(),
-      plural: name.toLowerCase().pluralize(),
+      singular: name.tableize().singularize(),
+      plural: name.tableize().pluralize(),
       name: name
     });
+    
     this.setOptions(options)
     $extend(this.options, {
       singular_xml: this.options.singular.replace(/_/g, "-"),
       plural_xml: this.options.plural.replace(/_/g, "-"),
     })
+    
     this.klass = new Class({
-      Extends:Jester.Model,
-      Implements: (this.options.associations) ? this.setAssociations(this.options.associations) : {},
-      resource: this
-    }).extend(this)
+      Extends:Jester.Model
+    })
+    $extend(this.klass, this)
+    $extend(this.klass.prototype, {resource: this})
+    $extend(this.klass.prototype, this.setAssociations(this.options.associations))
+    $extend(this.klass.prototype, this.setCustomActions(this.options.custom))
+    
     return this.klass
   },
   
   setAssociations: function(associations) {
+    if (!associations) return
+    
     var obj = {}
-    Hash.each(associations, function(association, name) {
-      obj['get' + name.capitalize()] = function() {
-        if (!this[name]) return;
-        return new Jester.Collection(this[name]);
+    Hash.each(associations, function(association, name) {      
+      var singular = name.singularize().camelize()
+      this['get' + singular] = function(data) {
+        return new (this.resource.associations[name])(data, true)
       }
-      this.associations[name] = association
+      var reflection = association[0]      
+      var options = $extend({prefix: true}, association[1] || {})      
+      options.prefix_given = options.prefix
+      
+      
+      if (options.prefix == true) {
+        options.prefix = this.locate.bind(this)        
+      } else if (options.prefix == false) {
+        options.prefix = this.options.prefix
+      }
+      var assoc = this.associations[name] = new Jester.Resource(reflection, options)
+      var klsfd = name.camelize().pluralize()
+      var singular = klsfd.singularize()
+      obj['get' + singular] = obj['get' + klsfd] = function() {
+        if (!this[name]) return;
+        return this[name]
+      }
+      obj['set' + singular] = function(value, existant) {
+        return this[name] = new assoc(value, existant, this)
+      }
+      obj['set' + klsfd] = function(value, existant) {
+        return this[name] = value.map(function(el) {
+          return new assoc(el, existant, this)
+        }.bind(this))
+      }
+      obj['new' + singular] = function(data) {
+        return new assoc(data, false, this)
+      }
+      obj['init' + singular] = function(data) {
+        return new assoc(data, true, this)
+      }
     }, this)
     return obj
   },
+  
+  setCustomActions: function(actions) {
+    if (!actions) return
+    var custom = {} 
+    
+    if (actions.instanceOf) { //We assume that array of custom methods is all of PUTs
+      arr = [actions].flatten()
+      actions = {}
+      for (var i = 0, j = actions.length; i < j; i++) actions[arr[i]] = "put" 
+    }
+    Hash.each(actions, function(value, key) {
+      custom[key] = Jester.Model.createCustomAction.call(this, key, value)
+    }, this)
+    return custom
+  },
 
 	getRequest: function() {
-	  return new Request[this.options.format.toUpperCase()]
+	  return new Request[this.options.format.toUpperCase()](this.options.requestOptions)
 	},
   
-  create: function(a,b) { //Ruby-style Model#create backward compat
-    return new (this.klass || this)(a,b)
+  create: function(a, b) { //Ruby-style Model#create backward compat
+    return new (this.klass || this)(a, b)
   },
   
-  request: function(options, callback) {
-	  if (options.route) options.url = this.getURL(options.route, options);
+  init: function(a) {
+    return this.create(a, true)
+  },
+  
+  request: function(options, callback, model) {
+	  if (options.route) options.url = this.getFormattedURL(options.route, options);
+  	if (options.data && options.data.run) options.data = options.data.call(model)
+	  
 	  var req = this.getRequest();
 	  ['success', 'failure', 'start', 'complete'].each(function(e) {
 	    var cc = 'on' + e.capitalize()
 	    req.addEvent(e, function(data) {
 	      if (this[cc]) data = this[cc](data)
-        if (options[cc]) options[cc](data)
         if (e == "success") {
           if (callback) callback.concat ? this.fireEvent(callback, data) : callback();
-          var result = this.create(this.getParser().parse(data), true);
-          this.callChain(result)
+          var result = this.handle(data)
         }
+        if (options[cc]) options[cc](data)
+        if (e == "success") this.callChain(result)
 	    }.bind(this));
 	    return req;
 	  }, this)
 	  req.send(options)
 	  
-	  return this;
+	  return req;
   },
   
-  find : function(id, params, callback) {
+  handle: function(data) {
+    data = this.options.postprocess(this.getParser().parse(data))
+    return ($type(data) == "array") ? data.map(this.init.bind(this)) : this.init(data);
+  },
+  
+  find: function(id, params, callback) {
     if (!callback && $type(params) != "object") {
       callback = params;
       params = null;
     }
     switch (id) {
-      case "first": return this.find("all").getFirst();
+      case "first": return this.find("all", callback)
       case "all": return this.request({method: "get", route: "list", data: params}, callback);
       default: return this.request({method: "get", route: "show", data: params, id: id}, callback);
     }
@@ -176,39 +250,63 @@ Jester.Resource = new Class({
   },
   
   getURL: function(route, thing) {
-    var prefix = (this.options.prefix && this.options.prefix.run ? this.options.prefix() : this.options.prefix)
-    return (prefix + (this.options.urls[route] || route)).replace(/:([a-zA-Z0-9]+)/g, this.interpolation(thing))
+    var prefix = thing.prefix || (this.options.prefix && this.options.prefix.run ? this.options.prefix(thing) : this.options.prefix)
+    return Jester.Resource.interpolate((prefix + (this.options.urls[route] || route)), thing, this.options)
   },
   
-  interpolation: function(thing) {
-    return (function(m, what) {
-      return this.interpolate(what, thing)
-    }).bind(this)
+  locate: function(thing) {
+    return this.getURL("show", thing)
+  },
+   
+  getFormattedURL: function(route, thing) {
+    return this.format(this.getURL(route, thing))
   },
   
-  interpolate: function(what, thing) {
-	  switch(what) {
-	    case "format":
-	      return "." + this.options.format
-	    case "singular": 
-	    case "plural": 
-	      return this.options[what]
-	    default: 
-	      return !thing ? this.options[what] : (typeof(thing[what]) == "function" ? thing[what]() : thing[what])
-	  }
-	}
+  format: function(string) {
+    return string.replace(/(?=\?)|\/?$/, '.' + this.options.format)
+  }
 });
 
+(function() {
+  
+  var fill = function (what, thing, opts) {
+    switch(what) {
+      case "format":
+        return "." + opts.format
+      case "singular": 
+      case "plural": 
+        return opts[what]
+      default:
+        if (!thing) return (opts) ? opts[what] : null
+        if (thing.resource) return thing.get(what.replace(/::/g, '.')) 
+        return (typeof(thing[what]) == "function" ? thing[what]() : thing[what])
+    }
+  }
+  
+  var interpolation = function(thing, opts) {
+    return function(m, what) {
+      return fill(what, thing, opts)
+    }
+  }
+
+  Jester.Resource.interpolate = function(str, thing, opts) {
+    return str.replace(/:((?:[a-zA-Z0-9]|::)+)/g, interpolation(thing, opts))
+  }
+  
+})()
 
 Jester.Model = new Class({
   Extends: Hash,
   
   Implements: [new Options, new Events],
   
-  initialize: function(attributes, existant_record) {
-    this.set(attributes || {})
+  initialize: function(attributes, existent_record, claiming) {
+    this._claiming = claiming
     this._defaults = attributes
-    this._new_record = !existant_record
+    
+    this.set(attributes)
+    this._new_record = !existent_record
+    
 		return this;
   },
   
@@ -216,36 +314,67 @@ Jester.Model = new Class({
     if (arguments.length == 2) {
       this.setAttribute(key, value)
     } else {
-      for (var k in key) this.setAttribute(k, key[k])
+      switch ($type(key)) {
+        case "string": case "number":
+          return this.set("id", key)
+        case "element":
+          try {
+            //try to get attribute resource_id
+            //else assume that id is formatted like resource_123
+            return this.set("id", key.get(this.getPrefix() + "_id") || key.get('id').match(new RegExp('^' + this.getPrefix() + '_' + '(.*)$'))[1])            
+          } catch(e) {
+            console.log('Couldnt extract ID from element', e)
+          }
+      }
+      
+      var complex = []
+      for (var k in key) {
+        if (["array", "object"].contains($type(key[k]))) {
+          complex.push(k)
+        } else {  
+          this.setAttribute(k, key[k])
+        }
+      }
+      
+      if (this._claiming) {
+        this.claim(this._claiming)
+        delete this._claiming
+      }
+      
+      complex.each(function(k) {
+        this.setAttribute(k, key[k])
+      }, this)
     }
+    
+    return this
+  },
+  
+  get: function(name) {
+    var bits = name.split(".")
+    var obj = this
+    bits.each(function(bit) {
+      if (!$defined(obj) || !obj.getAttribute) return obj = null
+      obj = obj.getAttribute(bit)
+    })
+    return obj
   },
   
   setAttribute: function(name, value) {
-    if ($type(value) == "array") {
-      var assoc = this.resource.associations[name]
-      if (assoc) {
-        if ($type(assoc) == "array") {
-          var reflection = assoc[0]
-          var options = assoc[1] || {}
-          if (options.prefix == true) {
-            options.prefix = this.resource.getURL.pass(["show", this], this.resource)
-          }
-          this.resource.associations[name] = new Jester.Resource(reflection, options)
-        }
-        this['new' + this.resource.associations[name].options.singular.capitalize()] = function(data) {
-          return new (this.resource.associations[name])(data)
-        }
-        this[name] = value.map(function(model) {
-          return new (this.resource.associations[name])(model, true)
-        }.bind(this))
-      }
-    } else {
-      this[name] = value
-    }
+    if (this['set' + name.camelize()]) value = this['set' + name.camelize()](value)
+    this[name] = value
+  },  
+  
+  getAttribute: function(name) {
+    if (this['get' + name.camelize()]) return this['get' + name.camelize()]()
+    return this[name]
+  },
+  
+  getAssociated: function(name) {
+    return this.resource.associations[name]
   },
   
   request: function(options, callback) {
-    return this.resource.request($extend(this.getClean(), options), callback)
+    return this.resource.request($extend(this.getClean(), options), callback, this)
   },
   
   toString: function() {
@@ -259,7 +388,7 @@ Jester.Model = new Class({
 		for (var key in this){
 			if (
 			  key != "prototype" && 
-			  key != "resource" && 
+			  key != "resource" &&
 			  key.match(/^[^_$A-Z]/) && //doesnt start with _, $ or capital letter
 			  typeof(this[key]) != "function"
 			) clean[key] = this[key];
@@ -285,12 +414,35 @@ Jester.Model = new Class({
 	
 	onFailure: function() {
 	  console.log("Achtung")
+	},
+	
+	getPrefix: function() {
+	  return this.resource.options.singular
+	},
+	
+	getPrefixedClean: function() {
+	  var obj = {}
+	  var clean = this.getClean()
+	  delete clean.prefix
+	  obj[this.getPrefix()] = clean
+	  
+	  return obj
+	},
+	
+	getURL: function(route) {
+	  return this.resource.getURL(route || "show", this)
+	},
+	
+	claim: function(what) {
+	  this.prefix = (this.resource.options.prefix_given) ? this.resource.options.prefix(what) : what.prefix
+	  return this
 	}
 });
 
 Jester.Model.Actions = new Hash({
   save: function() {
-	  return this._new_record ? {method: "post", route: "list"} : {method: "post", route: "show"}
+    if (!this._new_record) return Jester.Model.Actions.update.call(this)
+	  return {method: "post", route: "list", data: this.getPrefixedClean, onComplete: this.set.bind(this)}
 	},
 	
 	destroy: function() {
@@ -298,7 +450,7 @@ Jester.Model.Actions = new Hash({
 	},
 	
 	update: function() {
-	  return {method: "put", data: this.getAttributes(), route: "show"}
+	  return {method: "put", data: this.getPrefixedClean, route: "show"}
 	},
 	
 	reload: function() {
@@ -313,77 +465,60 @@ Jester.Collection = new Class({
   }
 })
 
-Jester.Model.Actions.each(function(k, a) {
-  Jester.Model.prototype[a] = function() {
-    var args = $A(arguments);
-    callback = ($type(args.getLast()) == "function") ? args.pop() : $empty;
-    var options = Jester.Model.Actions[a].call(this, args);
-    if ($type(options) == "object") {
-      this.fireEvent('before' + a.capitalize())
-      var that = this
-      return this.request(options).chain(function(data) {
-        that.fireEvent('after' + a.capitalize(), data);
-      })
+Jester.Model.extend({
+  createAction: function(name, options) {
+    if (!options) options = {}
+    if (!options.action) options.action = Jester.Model.Actions[name]
+    
+    return function() {
+      var args = $A(arguments);
+      callback = ($type(args.getLast()) == "function") ? args.pop() : $empty
+      $extend(options, options.action.apply(this, args))
+      this.fireEvent('before' + name.capitalize())
+    
+      var req = this.request(options)        
+      return req.chain(function(data) {
+        this.fireEvent('after' + name.capitalize(), data);
+        return req.callChain(data)
+      }.bind(this))
+      
+      return this
     }
-    return this
-  }
+  },
   
-  Jester.Collection.prototype[a] = function() {
-    var args = $A(arguments);
-    callback = ($type(args.getLast()) == "function") ? args.pop() : $empty;
-    this.each(function(model) {
-      model[a](args)
+  createCustomAction: function(name, method, obj) {
+    if (!this.options.urls[name]) this.options.urls[name] = "/:plural/:id/" + name
+    return Jester.Model.createAction(name, {
+      action: function (data) {
+        return {
+          onComplete: method == "put" ? this.set.bind(this) : $lambda,
+          data: data
+        }
+      },
+      route: name, 
+      method: method
     })
   }
+})
+
+Jester.Collection.extend({
+  createAction: function(name) {
+    return function() {
+      var args = $A(arguments);
+      callback = ($type(args.getLast()) == "function") ? args.pop() : $empty;
+      this.each(function(model) {
+        model[a](args)
+      })
+    }
+  }
+})
+
+Jester.Model.Actions.each(function(k, a) {
+  Jester.Model.prototype[a] = Jester.Model.createAction(a)
+  Jester.Collection.prototype[a] = Jester.Collection.createAction(a)
 })
 
 window.Resource = function(name, options) {
   window[name] = new Jester.Resource(name, options)
   return window[name]
 }
-
-/*
-  Inflector library, contributed graciously to Jester by Ryan Schuft.
-  The library in full is a complete port of Rails' Inflector, though Jester only uses its pluralization.
-  Its home page can be found at: http://code.google.com/p/inflection-js/
-*/
-
-if (!String.prototype.pluralize) String.prototype.pluralize = function(plural) {
-  var str=this;
-  if(plural)str=plural;
-  else {
-    var uncountable_words=['equipment','information','rice','money','species','series','fish','sheep','moose'];
-    var uncountable=false;
-    for(var x=0;!uncountable&&x<uncountable_words.length;x++)uncountable=(uncountable_words[x].toLowerCase()==str.toLowerCase());
-    if(!uncountable) {
-      var rules=[
-        [new RegExp('(m)an$','gi'),'$1en'],
-        [new RegExp('(pe)rson$','gi'),'$1ople'],
-        [new RegExp('(child)$','gi'),'$1ren'],
-        [new RegExp('(ax|test)is$','gi'),'$1es'],
-        [new RegExp('(octop|vir)us$','gi'),'$1i'],
-        [new RegExp('(alias|status)$','gi'),'$1es'],
-        [new RegExp('(bu)s$','gi'),'$1ses'],
-        [new RegExp('(buffal|tomat)o$','gi'),'$1oes'],
-        [new RegExp('([ti])um$','gi'),'$1a'],
-        [new RegExp('sis$','gi'),'ses'],
-        [new RegExp('(?:([^f])fe|([lr])f)$','gi'),'$1$2ves'],
-        [new RegExp('(hive)$','gi'),'$1s'],
-        [new RegExp('([^aeiouy]|qu)y$','gi'),'$1ies'],
-        [new RegExp('(x|ch|ss|sh)$','gi'),'$1es'],
-        [new RegExp('(matr|vert|ind)ix|ex$','gi'),'$1ices'],
-        [new RegExp('([m|l])ouse$','gi'),'$1ice'],
-        [new RegExp('^(ox)$','gi'),'$1en'],
-        [new RegExp('(quiz)$','gi'),'$1zes'],
-        [new RegExp('s$','gi'),'s'],
-        [new RegExp('$','gi'),'s']
-      ];
-      var matched=false;
-      for(var x=0;!matched&&x<=rules.length;x++) {
-        matched=str.match(rules[x][0]);
-        if(matched)str=str.replace(rules[x][0],rules[x][1]);
-      }
-    }
-  }
-  return str;
-};
