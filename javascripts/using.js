@@ -14,7 +14,7 @@
  
 //Doesnt require any preparation, works on use.
 
-var DependencyManager = new Class({
+DependencyManager = new Class({
   Implements: [Chain],
   
   initialize: function(doc) {    
@@ -22,35 +22,39 @@ var DependencyManager = new Class({
     
     this.manager = this
     this.document = $pick(doc, document)
-    if (!DependencyManager.aliases) DependencyManager.aliases = {}
-    if (!DependencyManager.dependencies) DependencyManager.dependencies = {}
-    
+    if (!this.constructor.aliases) this.constructor.aliases = {}
+    if (!this.constructor.dependencies) this.constructor.dependencies = {}
     this.loaded = []
+
+		if (Browser.Engine.trident) constructor.constructor = DependencyManager
     
     return $extend(constructor, this)
   },
   
   using: function() {
     var args = $A(arguments).flatten();
-    var callback = args.getLast().run && args.splice(-1)[0]
-    var start = !this.$chain.length
+    var callback = args.getLast().run && args.splice(-1, 1)[0]
+
     this.setup(args, callback)
-    
-    if (start) this.callChain()
+
     return this
   },
   
   setup: function(args, callback) {
+		var thread = new Chain
+		
     var files = args.map(this.expand.bind(this)).flatten().filter(this.notLoaded.bind(this))
+
     files.each(function(file) {
-      this.chain(this.load.pass(file, this))
+      thread.chain(this.load.pass([file, thread], this))
     }, this)
-      
-    if (callback) this.chain(function() {
-      this.callChain()
-      callback();
-    }.bind(this))
-    
+		
+    if (callback) thread.chain(function() {
+			callback()
+		})
+		
+		thread.callChain()
+
     return this
   },
   
@@ -62,30 +66,47 @@ var DependencyManager = new Class({
     var deps  = $A(arguments);
     var alias = deps.shift()
     var file  = deps.shift()
-    
-    DependencyManager.aliases[alias] = file
-    DependencyManager.dependencies[file] = deps
-    
+   
+    this.constructor.aliases[alias] = file
+    this.constructor.dependencies[file] = deps	
     return this
   },
   
   expand: function(file) {
-    if (DependencyManager.aliases[file]) file = DependencyManager.aliases[file] 
-    if (file.match(/^[a-z0-9]$/i)) {
-      console.error(file, 'looks like alias, but it is not registered')
-    }
-    return (DependencyManager.dependencies[file] || []).map(this.expand.bind(this)).concat(file)
+    if (this.constructor.aliases[file]) file = this.constructor.aliases[file] 
+    if (!file || file.match(/^[a-z0-9]*$/i)) file = null
+    return (this.constructor.dependencies[file] || []).map(this.expand.bind(this)).concat(file).filter($chk)
   },
   
-  load: function(file) {
-    this.loaded.push(file)
-    return Asset.javascript(file, {
+  load: function(file, thread) {
+    return Asset.javascript(file + (location.search.indexOf('NOCACHE') > -1 ? ("?" + Math.random()) : ""), {
       onload: function() {
-        console.info('Now using', file)
-        this.callChain()
+        if (window.console && window.console.info) console.info('Now using', file)
+			  this.loaded.push(file)
+        thread.callChain()
       }.bind(this),
       document: this.document
     }) 
   }
   
 });
+
+(function() {
+  
+  var setup = function() {
+    if (!this.manager) this.manager = new DependencyManager(this.document)
+  }
+
+  Window.implement({
+    using: function() {
+      setup.call(this)
+      this.manager.using.apply(this.manager, $A(arguments))
+    },
+  
+    register: function() {
+      setup.call(this)
+      this.manager.register.apply(this.manager, $A(arguments))
+    }
+  });
+   
+})();
