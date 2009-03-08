@@ -79,9 +79,11 @@ DependencyManager = new Class({
 		if (this.loaded.contains(file)) {
 			thread.callChain()
 		} else if (this.loading[file]) {
-			this.loading[file].$chain.unshift(function() {
+			var active = this.loading[file]
+			active.$chain.unshift(function() {
 				thread.callChain()
-			})
+				active.callChain()
+			}.bind(this))
 		} else {
 			this.loading[file] = thread
 	    return Asset.javascript(file + (location.search.indexOf('NOCACHE') == -1 ? ("?" + Math.random()) : ""), {
@@ -97,3 +99,23 @@ DependencyManager = new Class({
   }
   
 });
+
+(function() {
+  
+  var setup = function() {
+    if (!this.manager) this.manager = new DependencyManager(this.document)
+  }
+
+  Window.implement({
+    using: function() {
+      setup.call(this)
+      this.manager.using.apply(this.manager, $A(arguments))
+    },
+  
+    register: function() {
+      setup.call(this)
+      this.manager.register.apply(this.manager, $A(arguments))
+    }
+  });
+   
+})();
