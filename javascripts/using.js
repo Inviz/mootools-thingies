@@ -88,7 +88,7 @@ DependencyManager = new Class({
 			this.loading[file] = thread
 	    return Asset.javascript(file + (location.search.indexOf('NOCACHE') == -1 ? ("?" + Math.random()) : ""), {
 	      onload: function() {
-	        console.info('Now using', file)
+	        if (!window.console && window.console.info) console.info('Now using', file)
 					delete this.loading[file]
 				  this.loaded.push(file)
 	        thread.callChain()
