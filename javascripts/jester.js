@@ -157,7 +157,7 @@ Jester.Resource = new Class({
     this.setOptions(options)
     $extend(this.options, {
       singular_xml: this.options.singular.replace(/_/g, "-"),
-      plural_xml: this.options.plural.replace(/_/g, "-"),
+      plural_xml: this.options.plural.replace(/_/g, "-")
     })
     
     this.klass = new Class({
@@ -209,7 +209,7 @@ Jester.Resource = new Class({
         return new assoc(data, false, this)
       }
       obj['init' + singular] = function(data) {
-        return new assoc(data, true, this)
+        return new assoc(data, undefined, this)
       }
     }, this)
     return obj
@@ -343,8 +343,7 @@ Jester.Model = new Class({
     this._defaults = attributes
     
     this.set(attributes)
-    this._new_record = !existent_record
-    
+    this._new_record = existent_record ? false : !this.get('id')
 		return this;
   },
   
@@ -355,31 +354,32 @@ Jester.Model = new Class({
       switch ($type(key)) {
         case "string": case "number":
           return this.set("id", key)
+ 					break
         case "element":
-          try {
-            //try to get attribute resource_id
-            //else assume that id is formatted like resource_123
-            return this.set("id", key.get(this.getPrefix() + "_id") || key.get('id').match(new RegExp('^' + this.getPrefix() + '_' + '(.*)$'))[1])            
-          } catch(e) {
-            console.log('Couldnt extract ID from element', e)
-          }
+           //try to get attribute resource_id
+           //else assume that id is formatted like resource_123.
+					var id = key.get(this.getPrefix() + "_id")
+					if (!id) if (id = key.get('id')) id = id.match(new RegExp('^' + this.getPrefix() + '_' + '(.*)$'))[1]
+          if (id) this.set("id", id) 
+ 					break
+				default:
+					var complex = []
+		      for (var k in key) {
+		        if (["array", "object"].contains($type(key[k]))) {
+		          complex.push(k)
+		        } else {  
+		          this.setAttribute(k, key[k])
+		        }
+		      }
       }
       
-      var complex = []
-      for (var k in key) {
-        if (["array", "object"].contains($type(key[k]))) {
-          complex.push(k)
-        } else {  
-          this.setAttribute(k, key[k])
-        }
-      }
       
       if (this._claiming) {
         this.claim(this._claiming)
         delete this._claiming
       }
       
-      complex.each(function(k) {
+      if (complex && complex.length) complex.each(function(k) {
         this.setAttribute(k, key[k])
       }, this)
     }

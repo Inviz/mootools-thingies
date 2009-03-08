@@ -25,6 +25,7 @@ DependencyManager = new Class({
     if (!this.constructor.aliases) this.constructor.aliases = {}
     if (!this.constructor.dependencies) this.constructor.dependencies = {}
     this.loaded = []
+		this.loading = {}
 
 		if (Browser.Engine.trident) constructor.constructor = DependencyManager
     
@@ -43,7 +44,7 @@ DependencyManager = new Class({
   setup: function(args, callback) {
 		var thread = new Chain
 		
-    var files = args.map(this.expand.bind(this)).flatten().filter(this.notLoaded.bind(this))
+    var files = args.map(this.expand.bind(this)).flatten()
 
     files.each(function(file) {
       thread.chain(this.load.pass([file, thread], this))
@@ -56,10 +57,6 @@ DependencyManager = new Class({
 		thread.callChain()
 
     return this
-  },
-  
-  notLoaded: function(arg) {
-    return !this.loaded.contains(arg)
   },
   
   register: function() {
@@ -79,34 +76,24 @@ DependencyManager = new Class({
   },
   
   load: function(file, thread) {
-    return Asset.javascript(file + (location.search.indexOf('NOCACHE') > -1 ? ("?" + Math.random()) : ""), {
-      onload: function() {
-        if (window.console && window.console.info) console.info('Now using', file)
-			  this.loaded.push(file)
-        thread.callChain()
-      }.bind(this),
-      document: this.document
-    }) 
+		if (this.loaded.contains(file)) {
+			thread.callChain()
+		} else if (this.loading[file]) {
+			this.loading[file].$chain.unshift(function() {
+				thread.callChain()
+			})
+		} else {
+			this.loading[file] = thread
+	    return Asset.javascript(file + (location.search.indexOf('NOCACHE') == -1 ? ("?" + Math.random()) : ""), {
+	      onload: function() {
+	        console.info('Now using', file)
+					delete this.loading[file]
+				  this.loaded.push(file)
+	        thread.callChain()
+	      }.bind(this),
+	      document: this.document
+	    })
+		}
   }
   
 });
-
-(function() {
-  
-  var setup = function() {
-    if (!this.manager) this.manager = new DependencyManager(this.document)
-  }
-
-  Window.implement({
-    using: function() {
-      setup.call(this)
-      this.manager.using.apply(this.manager, $A(arguments))
-    },
-  
-    register: function() {
-      setup.call(this)
-      this.manager.register.apply(this.manager, $A(arguments))
-    }
-  });
-   
-})();
