@@ -1,62 +1,24 @@
-//Jester ported to mootools
-//Result or syntax may vary
-//But the code's much better
-//
-//  var Post = new Resource("Post")
-//  Post.find("all", function(p) {
-//    p.title = "All your base are belong to us"
-//    p.save
-//  })
-//
-//  p = new Post({title: "Hello world"}).save
-//  p.errors #=> {something}
-//
-//This thing is rails & merb-oriented
-//As they are supported out of the box:
-//
-//Merb, with Merb.disable(:json) & ActiveRecord:
-//
-//  provides :json
-//  display @post, :only => [:title, :body, :created_at, :id], :include => {:comments => {:only => [:body, :created_at, 
-//  :id]}}
-//
-//Merb without ActiveRecord:
-//
-//  provides :json
-//  display @post #cant control anything here, associations not included
-//
-//Rails:
-//
-//  respond_to do |f|
-//    f.json do
-//      @post.to_json, :only => [:title, :body, :created_at, :id], :include => {:comments => {:only => [:body, 
-//      :created_at, :id]}}
-//    end
-//  end
-//
-//So with that backend we can do this: 
-//
-//  new Resource("Post", {
-//    associations: {
-//      comments: ["Comment", {prefix: true}] #setting autoprefix on 
-//    } 
-//  })
-//
-//  Post.find(1).chain(function(post) {
-//    post.title = "defaced"
-//    post.comments.each(function(comment) {
-//      comment.destroy() # DELETE /posts/1/comments/n
-//    })
-//    post.save().chain(function(result) {
-//      if (!result) {
-//        alert(post.errors) # => ["Title is too short"]
-//      } else {
-//        alert("Ha ha ha... You are on your way to destruction")
-//      }
-//    }) # PUT /posts/1/ title=defaced
-//  })
-//
+// Jester ported to mootools
+// Result or syntax may vary
+// But the code's much better
 
+//var Post = new Resource("Post")
+//Post.find("all", function(p) {
+//  p.title = "All your base are belong to us"
+//  p.save
+//})
+
+//p = new Post({title: "Hello world"}).save
+//p.errors #=> {something}
+
+//Model.prototype.addEvents({ //global callbacks example
+//  'start': function() {
+//    $('ticker').set('html', 'Loading')
+//  },
+//  'complete': function() {
+//    $('ticker').set('html', 'Loading')
+//  }
+//})
 var Jester = new Hash;
 Jester.Parsers = new Class({
   initialize: function(context) {
@@ -193,10 +155,16 @@ Jester.Resource = new Class({
       var assoc = this.associations[name] = new Jester.Resource(reflection, options)
       var klsfd = name.camelize().pluralize()
       var singular = klsfd.singularize()
-      obj['get' + singular] = obj['get' + klsfd] = function() {
+      obj['get' + singular] = function() {
         if (!this[name]) return;
         return this[name]
       }
+			obj['get' + klsfd] = function() {
+				return assoc.claim(this)
+			}
+			obj['get' + klsfd + 'Association'] = function() {
+				return assoc.claim(this)
+			}
       obj['set' + singular] = function(value, existant) {
         return this[name] = new assoc(value, existant, this)
       }
@@ -241,6 +209,11 @@ Jester.Resource = new Class({
   init: function(a) {
     return this.create(a, true)
   },
+	
+	claim: function(thing) {
+		this.options.prefix = thing.prefix || (this.options.prefix && this.options.prefix.run ? this.options.prefix(thing) : this.options.prefix)
+		return this
+	},
   
   request: function(options, callback, model) {
 	  if (options.route) options.url = this.getFormattedURL(options.route, options);
@@ -252,8 +225,8 @@ Jester.Resource = new Class({
 	    req.addEvent(e, function(data) {
 	      if (this[cc]) data = this[cc](data)
         if (e == "success") {
-          if (callback) callback.concat ? this.fireEvent(callback, data) : callback();
-          var result = this.handle(data)
+        	var result = this.handle(data)
+          if (callback) callback.concat ? this.fireEvent(callback, data) : (data.length ? callback.apply(window, result) : callback(result))
         }
         if (options[cc]) options[cc](data)
         if (e == "success") this.callChain(result)
@@ -293,7 +266,7 @@ Jester.Resource = new Class({
   },
   
   locate: function(thing) {
-    return this.getURL("show", thing)
+		return this.getURL("show", thing)
   },
    
   getFormattedURL: function(route, thing) {
@@ -412,7 +385,7 @@ Jester.Model = new Class({
   },
   
   request: function(options, callback) {
-    return this.resource.request($extend(this.getClean(), options), callback, this)
+		return this.resource.request($extend(this.getClean(), options), callback, this)
   },
   
   toString: function() {
@@ -447,7 +420,7 @@ Jester.Model = new Class({
 	},
 	
 	onSuccess: function(data) {
-	  return new (this.resource.getParser(data))
+		return new (this.resource.getParser(data))
 	},
 	
 	onFailure: function() {
@@ -472,7 +445,7 @@ Jester.Model = new Class({
 	},
 	
 	claim: function(what) {
-	  this.prefix = (this.resource.options.prefix_given) ? this.resource.options.prefix(what) : what.prefix
+	  this.prefix = (this.resource.options.prefix_given) && this.resource.options.prefix.run ? this.resource.options.prefix(what) : what.prefix
 	  return this
 	}
 });
@@ -514,7 +487,7 @@ Jester.Model.extend({
       $extend(options, options.action.apply(this, args))
       this.fireEvent('before' + name.capitalize())
     
-      var req = this.request(options)        
+      var req = this.request(options, callback)        
       return req.chain(function(data) {
         this.fireEvent('after' + name.capitalize(), data);
         return req.callChain(data)
