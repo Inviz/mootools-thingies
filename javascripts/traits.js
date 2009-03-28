@@ -3,6 +3,12 @@
 //Basically, traits is a way to keep your code clean
 //Each trait is a class that is applied on given class 
 
+//You can split your big widget code to smaller classes and load 
+//them on-demand (html attributes or depending on content). 
+//Load only what you need!
+
+//Real world usage example: http://gist.github.com/86986
+
 //Like multiple extend
 Class.Mutators.Inherits = function(self, klasses){
 	$splat(klasses).each(function(klass){
@@ -14,9 +20,6 @@ Class.Mutators.Inherits = function(self, klasses){
 	});
 	return self;
 };
-
-
-//Real world usage example: http://gist.github.com/86986
 
 //Short example:
 //register('tabs', 'tabs.js')
