@@ -9,7 +9,7 @@
 //register('tabs', 'tabs/tabs.js')
 
 //Second, Tabs.Sliding subclass. Like tabs but content gets slided
-//register('tabs-sliding', 'tabs/sliding/sliding.js')
+//register('tabs-sliding', 'tabs/sliding/sliding.js', 'sliding-canvas')
 //register('tabs-animated', 'tabs/sliding/traits/tabs-animated.js')
 
 //Third, Tabs.Vertical. Like vertical tabs
@@ -18,7 +18,7 @@
 
 //Common traits
 //register('tabs-remote', 'tabs/traits/tabs-remote.js')
-//register('tabs-historical', 'tabs/traits/tabs-historical.js')
+//register('tabs-historical', 'tabs/traits/tabs-historical.js', 'history') //load history dependency
 
 
 //Tabs.extend(Types)
